@@ -1,0 +1,20 @@
+(StartDate as date, EndDate as date, optional Culture as nullable text) as table =>
+
+let
+    DayCount = Duration.Days(Duration.From(EndDate - StartDate)) + 1,
+    Source = List.Dates(StartDate,DayCount,#duration(1,0,0,0)),
+    TableFromList = Table.FromList(Source, Splitter.SplitByNothing()),    
+    ChangedType = Table.TransformColumnTypes(TableFromList,{{"Column1", type date}}),
+    RenamedColumns = Table.RenameColumns(ChangedType,{{"Column1", "Date"}}),
+    InsertYearKey = Table.AddColumn(RenamedColumns, "YearKey", each Date.Year([Date])),
+    InsertYear = Table.AddColumn(InsertYearKey, "Year", each ("CY" & Number.ToText([YearKey])), type text),
+    InsertQuarterKey = Table.AddColumn(InsertYear, "QuarterKey", each (([YearKey] * 10) + Date.QuarterOfYear([Date]))),
+    InsertQuarter = Table.AddColumn(InsertQuarterKey, "Quarter", each ("CY" & Number.ToText([YearKey]) & "-Q" & Number.ToText(Date.QuarterOfYear([Date]))), type text),
+    InsertMonthKey = Table.AddColumn(InsertQuarter, "MonthKey", each (([YearKey] * 100) + Date.Month([Date]))),
+    InsertMonth = Table.AddColumn(InsertMonthKey, "Month", each (Number.ToText([YearKey]) & "-" & Date.ToText([Date], "MMM", Culture)), type text),
+    InsertDateKey = Table.AddColumn(InsertMonth, "DateKey", each (([YearKey] * 10000) + (Date.Month([Date]) * 100) + Date.Day([Date]))),
+    InsertDay = Table.AddColumn(InsertDateKey, "Day", each Date.ToText([Date], "yyyy-MMM-dd", Culture), type text),
+    SetNumericColumns = Table.TransformColumnTypes(InsertDay, {{"DateKey", Int64.Type}, {"MonthKey", Int64.Type}, {"QuarterKey", Int64.Type}, {"YearKey", Int64.Type}}),
+    DateTable = Table.ReorderColumns(SetNumericColumns, {"DateKey", "Date", "Day", "MonthKey", "Month", "QuarterKey", "Quarter", "YearKey", "Year"})
+  in
+    DateTable
